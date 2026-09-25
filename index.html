@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>TETRIS · 俄罗斯方块 经典版</title>
+<link rel="preconnect" href="https://fonts.googleapis.cn" />
+<link href="https://fonts.googleapis.cn/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --white: #f4f4f4;
+    --dim: #9aa0b0;
+    --frame: #4a6fd8;
+    --frame-dark: #0d1737;
+    --gold: #ffd54a;
+    --red: #ff4040;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #000;
+    color: var(--white);
+    font-family: "Press Start 2P", "Microsoft YaHei", "PingFang SC", monospace;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* CRT 扫描线 + 暗角 */
+  .scanlines {
+    position: fixed; inset: 0; z-index: 100; pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0 1px, transparent 1px 3px);
+  }
+
+  /* ===== 顶栏 ===== */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 880px; margin: 0 auto; padding: 14px 16px 8px;
+  }
+  .logo { display: flex; align-items: baseline; gap: 12px; }
+  .logo .tt { font-size: 20px; letter-spacing: 2px; }
+  .logo .tt i { font-style: normal; }
+  .logo small { font-family: "Microsoft YaHei", sans-serif; font-size: 11px; color: var(--dim); letter-spacing: 3px; }
+  .topbtns { display: flex; gap: 8px; }
+  .chip {
+    font-family: inherit; font-size: 10px;
+    background: #000; color: var(--white);
+    border: 2px solid var(--white);
+    padding: 7px 10px; cursor: pointer; letter-spacing: 1px;
+    box-shadow: 3px 3px 0 rgba(255,255,255,0.25);
+  }
+  .chip:hover { background: var(--white); color: #000; }
+  .chip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(255,255,255,0.25); }
+  .chip.active { background: var(--gold); border-color: var(--gold); color: #000; }
+
+  /* ===== 三栏布局（仿 NES 原版） ===== */
+  .layout {
+    display: flex; justify-content: center; align-items: flex-start;
+    gap: 22px; padding: 6px 16px 16px;
+  }
+
+  /* 左：STATISTICS */
+  .stats-col { width: 148px; padding-top: 6px; }
+  .nes-label { font-size: 10px; letter-spacing: 2px; color: var(--white); }
+  .stats-col .nes-label { margin-bottom: 16px; }
+  .stat-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; padding: 0 2px;
+  }
+  .stat-row canvas { width: 56px; height: 26px; }
+  .stat-row span { font-size: 11px; }
+
+  /* 中：游戏区 */
+  .stage {
+    position: relative; line-height: 0;
+    background: #000;
+    border: 4px solid var(--frame);
+    outline: 3px solid var(--frame-dark);
+    box-shadow: 0 0 28px rgba(74,111,216,0.35);
+  }
+  #gameCanvas { display: block; }
+
+  /* 右：信息栏 */
+  .info-col { width: 150px; }
+  .info-block { margin-bottom: 16px; }
+  .info-block .nes-num { font-size: 14px; margin-top: 8px; letter-spacing: 1px; }
+  .info-block .nes-num.gold { color: var(--gold); }
+  .nes-box {
+    border: 3px solid var(--white);
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 8px; padding: 4px;
+  }
+  .nes-box canvas { width: 100%; height: auto; }
+  .info-gap { margin-top: 18px; }
+
+  /* ===== 覆盖层 ===== */
+  .overlay {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.9);
+    text-align: center; padding: 20px;
+    transition: opacity .2s ease;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+  .ov-title { font-size: 26px; letter-spacing: 4px; margin-bottom: 18px; line-height: 1.5; }
+  .ov-title.red { color: var(--red); }
+  .ov-title i { font-style: normal; }
+  .ov-text { font-size: 10px; color: var(--dim); line-height: 2.2; margin-bottom: 20px; }
+  .ov-text b { color: var(--gold); font-weight: normal; }
+  .btn {
+    font-family: inherit; font-size: 12px; letter-spacing: 2px;
+    background: var(--white); color: #000; border: none;
+    padding: 12px 22px; cursor: pointer;
+    box-shadow: 4px 4px 0 rgba(255,255,255,0.35);
+  }
+  .btn:hover { background: var(--gold); }
+  .btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(255,255,255,0.35); }
+  .btn.ghost {
+    background: #000; color: var(--white);
+    border: 2px solid var(--white); box-shadow: none; margin-left: 10px;
+  }
+  .blink { animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .mini-help { margin-top: 20px; font-size: 9px; color: var(--dim); line-height: 2.4; }
+  kbd {
+    display: inline-block; border: 1px solid var(--dim); border-bottom-width: 2px;
+    padding: 2px 5px; margin: 0 2px; font-family: inherit; font-size: 8px; color: var(--white);
+  }
+
+  /* ===== 玩法说明弹窗 ===== */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,0.82);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .modal-mask.open { opacity: 1; pointer-events: auto; }
+  .modal {
+    width: min(580px, 92vw); max-height: 86vh; overflow-y: auto;
+    background: #000; border: 3px solid var(--white);
+    box-shadow: 0 0 0 3px #000, 0 0 0 6px var(--frame);
+    padding: 26px 28px;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+  .modal h2 {
+    font-family: "Press Start 2P", monospace;
+    font-size: 18px; letter-spacing: 3px; margin-bottom: 6px; color: var(--gold);
+  }
+  .modal .sub { color: var(--dim); font-size: 13px; }
+  .modal h3 {
+    font-size: 14px; color: #7db3ff; margin: 20px 0 10px;
+    padding-bottom: 6px; border-bottom: 1px dashed #333;
+  }
+  .modal table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .modal th, .modal td { padding: 7px 8px; text-align: left; border-bottom: 1px solid #222; }
+  .modal th { color: var(--dim); font-weight: 600; font-size: 12px; }
+  .modal td:last-child { color: #d8e2f0; }
+  .modal .hl { color: var(--gold); font-weight: 700; }
+  .modal ul { padding-left: 18px; font-size: 13px; color: #c2d4e8; line-height: 2; }
+  .modal .note { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  .modal .close-row { text-align: center; margin-top: 22px; }
+  .modal::-webkit-scrollbar { width: 8px; }
+  .modal::-webkit-scrollbar-thumb { background: #333; }
+
+  /* ===== 底部 ===== */
+  .foot { text-align: center; color: var(--dim); font-size: 9px; padding: 4px 0 14px; letter-spacing: 1px; }
+
+  /* ===== 移动端 ===== */
+  .mobile-controls {
+    display: none;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px; padding: 0 12px 18px; max-width: 480px; margin: 0 auto;
+  }
+  .mobile-controls button {
+    font-family: inherit; font-size: 10px;
+    background: #000; color: var(--white);
+    border: 2px solid var(--white);
+    padding: 12px 0; touch-action: manipulation; cursor: pointer;
+  }
+  .mobile-controls button:active { background: var(--frame); }
+
+  @media (max-width: 760px) {
+    html, body { overflow-y: auto; }
+    .topbar { padding: 10px 12px 4px; flex-wrap: wrap; gap: 8px; }
+    .logo .tt { font-size: 15px; }
+    .chip { font-size: 9px; padding: 6px 8px; }
+    .layout { flex-wrap: wrap; gap: 10px; padding: 4px 10px 10px; }
+    .stats-col { display: none; }
+    .order-board { order: -1; width: 100%; display: flex; justify-content: center; }
+    #gameCanvas { width: min(74vw, 300px); height: auto; }
+    .info-col {
+      width: 100%; max-width: 340px;
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    }
+    .info-block { margin-bottom: 0; text-align: center; }
+    .nes-box { margin-top: 4px; }
+    .nes-box canvas { width: 90px; }
+    .mobile-controls { display: grid; }
+    .foot { display: none; }
+    .ov-title { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+<header class="topbar">
+  <div class="logo">
+    <span class="tt"><i style="color:#ff4d6d">T</i><i style="color:#ff9f1c">E</i><i style="color:#ffdd00">T</i><i style="color:#00ff7e">R</i><i style="color:#00e5ff">I</i><i style="color:#3c9dff">S</i></span>
+    <small>俄罗斯方块 · 经典版</small>
+  </div>
+  <div class="topbtns">
+    <button class="chip" id="helpBtn">HELP</button>
+    <button class="chip" id="pauseBtn">PAUSE</button>
+    <button class="chip" id="muteBtn">SOUND</button>
+    <button class="chip" id="restartBtn">RESET</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- 左：STATISTICS（原版掉落统计） -->
+  <aside class="stats-col">
+    <div class="nes-label">STATISTICS</div>
+    <div id="statsList"></div>
+  </aside>
+
+  <!-- 中：游戏区 -->
+  <section class="stage order-board">
+    <canvas id="gameCanvas" width="300" height="600"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="ov-title" id="ovTitle"><i style="color:#ff4d6d">T</i><i style="color:#ff9f1c">E</i><i style="color:#ffdd00">T</i><i style="color:#00ff7e">R</i><i style="color:#00e5ff">I</i><i style="color:#3c9dff">S</i></div>
+      <div class="ov-text" id="ovText">NES CLASSIC RULES<br>40 · 100 · 300 · 1200 × LEVEL</div>
+      <div>
+        <button class="btn" id="startBtn">▶ START</button>
+        <button class="btn ghost" id="ovHelpBtn">HELP</button>
+      </div>
+      <div class="mini-help" id="miniHelp">
+        <div><kbd>←</kbd><kbd>→</kbd> MOVE <kbd>↓</kbd> SOFT DROP <kbd>SPACE</kbd> HARD DROP</div>
+        <div><kbd>↑</kbd>/<kbd>X</kbd> ROTATE <kbd>Z</kbd> CCW <kbd>C</kbd> HOLD <kbd>P</kbd> PAUSE</div>
+        <div class="blink" style="margin-top:8px">PRESS ENTER TO START</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右：TOP / SCORE / NEXT / HOLD / LEVEL / LINES -->
+  <aside class="info-col">
+    <div class="info-block">
+      <div class="nes-label">TOP</div>
+      <div class="nes-num gold" id="highScore">000000</div>
+    </div>
+    <div class="info-block">
+      <div class="nes-label">SCORE</div>
+      <div class="nes-num" id="score">000000</div>
+    </div>
+    <div class="info-block info-gap">
+      <div class="nes-label">NEXT</div>
+      <div class="nes-box"><canvas id="nextCanvas" width="120" height="80"></canvas></div>
+    </div>
+    <div class="info-block">
+      <div class="nes-label">HOLD</div>
+      <div class="nes-box"><canvas id="holdCanvas" width="120" height="70"></canvas></div>
+    </div>
+    <div class="info-block info-gap">
+      <div class="nes-label">LEVEL</div>
+      <div class="nes-num" id="level">01</div>
+    </div>
+    <div class="info-block">
+      <div class="nes-num" id="lines">LINES-000</div>
+    </div>
+  </aside>
+</main>
+
+<div class="mobile-controls">
+  <button data-action="left">←</button>
+  <button data-action="right">→</button>
+  <button data-action="soft">↓</button>
+  <button data-action="ccw">⟲</button>
+  <button data-action="cw">⟳</button>
+  <button data-action="hold">HOLD</button>
+  <button data-action="drop">DROP</button>
+</div>
+
+<footer class="foot">H - HELP · P - PAUSE · R - RESET · C - HOLD · SPACE - HARD DROP</footer>
+
+<!-- 玩法说明弹窗 -->
+<div class="modal-mask" id="helpMask">
+  <div class="modal">
+    <h2>HELP · 玩法说明</h2>
+    <p class="sub">目标：堆叠下落的方块，填满整行即可消除得分。方块堆到顶部则游戏结束。</p>
+
+    <h3>🎮 操作方法</h3>
+    <table>
+      <tr><th>按键</th><th>功能</th></tr>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>左右移动（长按快速移动）</td></tr>
+      <tr><td><kbd>↓</kbd></td><td>软降，每降 1 格 <span class="hl">+1 分</span></td></tr>
+      <tr><td><kbd>空格</kbd></td><td>硬降（瞬间落底），每格 <span class="hl">+2 分</span></td></tr>
+      <tr><td><kbd>↑</kbd> / <kbd>X</kbd></td><td>顺时针旋转</td></tr>
+      <tr><td><kbd>Z</kbd></td><td>逆时针旋转</td></tr>
+      <tr><td><kbd>C</kbd> / <kbd>Shift</kbd></td><td>暂存当前方块（每块限一次）</td></tr>
+      <tr><td><kbd>P</kbd> / <kbd>Esc</kbd></td><td>暂停 / 继续</td></tr>
+      <tr><td><kbd>R</kbd></td><td>重新开始</td></tr>
+      <tr><td><kbd>H</kbd></td><td>打开 / 关闭本说明</td></tr>
+    </table>
+
+    <h3>🏆 计分规则（经典 NES 原版）</h3>
+    <table>
+      <tr><th>一次消除</th><th>得分</th></tr>
+      <tr><td>1 行（Single）</td><td><span class="hl">40</span> × 当前等级</td></tr>
+      <tr><td>2 行（Double）</td><td><span class="hl">100</span> × 当前等级</td></tr>
+      <tr><td>3 行（Triple）</td><td><span class="hl">300</span> × 当前等级</td></tr>
+      <tr><td>4 行（Tetris）</td><td><span class="hl">1200</span> × 当前等级</td></tr>
+    </table>
+    <p class="note">※ 消行得分按消除发生时的等级结算；软降每格 +1 分，硬降每格 +2 分。</p>
+
+    <h3>⚡ 等级与速度</h3>
+    <table>
+      <tr><th>规则</th><th>说明</th></tr>
+      <tr><td>升级条件</td><td>每累计消除 10 行升 1 级</td></tr>
+      <tr><td>下落速度</td><td>沿用 NES 原版帧率表，等级越高下落越快</td></tr>
+      <tr><td>极限速度</td><td>30 级起达到最快（原版 Kill Screen 速度）</td></tr>
+    </table>
+
+    <h3>💡 实用技巧</h3>
+    <ul>
+      <li>在最左或最右留一条竖井，等长条 <b style="color:#00e5ff">I</b> 一次消 4 行拿 Tetris 高分。</li>
+      <li>尽量让堆叠顶部保持平整，避免出现深坑。</li>
+      <li>善用暂存（C / Shift）把暂时用不上的关键方块存起来。</li>
+      <li>多看右侧 NEXT 预览，提前规划接下来 2~3 块的位置。</li>
+      <li>方块贴地后仍可短暂移动 / 旋转微调（有次数上限）。</li>
+    </ul>
+
+    <div class="close-row"><button class="btn" id="helpCloseBtn">▶ START</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ===== 常量 =====
+const COLS = 10;
+const VISIBLE_ROWS = 20;
+const HIDDEN_ROWS = 2;
+const ROWS = VISIBLE_ROWS + HIDDEN_ROWS;
+const BLOCK = 30;
+const DAS = 130;
+const ARR = 40;
+const LOCK_DELAY = 500;
+const MAX_LOCK_RESETS = 15;
+const SOFT_DROP_INTERVAL = 35;
+const CLEAR_ANIM_MS = 260;
+
+// 经典 NES 原版计分：40 / 100 / 300 / 1200 × 当前等级
+const LINE_SCORES = [0, 40, 100, 300, 1200];
+const CLEAR_NAMES = ['', 'SINGLE', 'DOUBLE', 'TRIPLE', 'TETRIS!'];
+// NES 原版重力表（60fps 下每格所需帧数）
+const NES_GRAVITY_FRAMES = [48,43,38,33,28,23,18,13,8,6,5,5,5,4,4,4,3,3,3,2,2,2,2,2,2,2,2,2,2,1];
+
+// NES 风配色（base / 高光 light / 暗部 dark）
+const PALETTE = {
+  I: { base: '#19b5d6', light: '#7de8ff', dark: '#0e6b80' },
+  O: { base: '#e3c807', light: '#fff08a', dark: '#8a7a04' },
+  T: { base: '#b44fd8', light: '#e09bff', dark: '#6d2688' },
+  S: { base: '#3ecf4f', light: '#8aff9b', dark: '#1e7a29' },
+  Z: { base: '#e0424f', light: '#ff8f98', dark: '#8a1f28' },
+  J: { base: '#3a6de0', light: '#8aabff', dark: '#1e3a8a' },
+  L: { base: '#e08828', light: '#ffb76b', dark: '#8a4f10' },
+};
+const TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
+const SPAWN_X = { I: 3, O: 4, T: 3, S: 3, Z: 3, J: 3, L: 3 };
+const SPAWN_Y = 1;
+
+const BASE_SHAPES = {
+  I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  O: [[1,1],[1,1]],
+  T: [[0,1,0],[1,1,1],[0,0,0]],
+  S: [[0,1,1],[1,1,0],[0,0,0]],
+  Z: [[1,1,0],[0,1,1],[0,0,0]],
+  J: [[1,0,0],[1,1,1],[0,0,0]],
+  L: [[0,0,1],[1,1,1],[0,0,0]],
+};
+
+function rotateMatrix(m) {
+  const n = m.length;
+  const r = Array.from({ length: n }, () => Array(n).fill(0));
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++)
+      r[x][n - 1 - y] = m[y][x];
+  return r;
+}
+const ROTATIONS = {};
+for (const t in BASE_SHAPES) {
+  const m = [BASE_SHAPES[t]];
+  for (let i = 0; i < 3; i++) m.push(rotateMatrix(m[i]));
+  ROTATIONS[t] = m;
+}
+
+// SRS 墙踢（表内 y 向上为正，使用时取反）
+const JLSTZ_KICKS = {
+  '0>1': [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+  '1>0': [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+  '1>2': [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+  '2>1': [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+  '2>3': [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+  '3>2': [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+  '3>0': [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+  '0>3': [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+};
+const I_KICKS = {
+  '0>1': [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+  '1>0': [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+  '1>2': [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+  '2>1': [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+  '2>3': [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+  '3>2': [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+  '3>0': [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+  '0>3': [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+};
+
+// ===== 状态 =====
+let grid = [];
+let current = null;
+let holdType = null, canHold = true;
+let queue = [], bag = [];
+let score = 0, linesCleared = 0, level = 1, highScore = 0;
+let pieceCounts = {};
+let state = 'menu';
+let lastTime = 0, dropTimer = 0;
+let lockTimer = 0, lockResets = 0, grounded = false;
+let clearingRows = [], clearAnimTimer = 0;
+let floaters = [];
+let soundOn = true, audioCtx = null;
+let helpOpen = false, autoPausedByHelp = false;
+
+const input = {
+  left:  { held: false, t: 0, repeated: false },
+  right: { held: false, t: 0, repeated: false },
+  down:  { held: false },
+};
+
+// ===== DOM =====
+const $ = id => document.getElementById(id);
+const canvas = $('gameCanvas');
+const ctx = canvas.getContext('2d');
+const holdCanvas = $('holdCanvas');
+const holdCtx = holdCanvas.getContext('2d');
+const nextCanvas = $('nextCanvas');
+const nextCtx = nextCanvas.getContext('2d');
+const overlay = $('overlay');
+const ovTitle = $('ovTitle');
+const ovText = $('ovText');
+const startBtn = $('startBtn');
+const helpMask = $('helpMask');
+const helpBtn = $('helpBtn');
+const pauseBtn = $('pauseBtn');
+const muteBtn = $('muteBtn');
+const restartBtn = $('restartBtn');
+
+// ===== NES 像素方块精灵 =====
+function makeNesSprite(p) {
+  const c = document.createElement('canvas');
+  c.width = c.height = BLOCK;
+  const g = c.getContext('2d');
+  // 外框黑边
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, BLOCK, BLOCK);
+  // 主体
+  g.fillStyle = p.base;
+  g.fillRect(1, 1, BLOCK - 2, BLOCK - 2);
+  // 上/左 高光斜角
+  g.fillStyle = p.light;
+  g.fillRect(1, 1, BLOCK - 2, 3);
+  g.fillRect(1, 1, 3, BLOCK - 2);
+  // 下/右 暗部斜角
+  g.fillStyle = p.dark;
+  g.fillRect(1, BLOCK - 4, BLOCK - 2, 3);
+  g.fillRect(BLOCK - 4, 1, 3, BLOCK - 2);
+  // 内部斜角过渡（阶梯像素）
+  g.fillStyle = p.base;
+  g.fillRect(4, 4, 2, 2);
+  g.fillRect(BLOCK - 6, BLOCK - 6, 2, 2);
+  // NES 经典白色 L 形闪光
+  g.fillStyle = 'rgba(255,255,255,0.9)';
+  g.fillRect(6, 6, 10, 3);
+  g.fillRect(6, 6, 3, 10);
+  return c;
+}
+function makeGhostSprite() {
+  const c = document.createElement('canvas');
+  c.width = c.height = BLOCK;
+  const g = c.getContext('2d');
+  g.strokeStyle = 'rgba(255,255,255,0.4)';
+  g.lineWidth = 2;
+  g.strokeRect(2, 2, BLOCK - 4, BLOCK - 4);
+  return c;
+}
+const SPRITES = {};
+for (const t in PALETTE) SPRITES[t] = makeNesSprite(PALETTE[t]);
+const GHOST_SPRITE = makeGhostSprite();
+
+// ===== 工具 =====
+function initGrid() {
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+}
+
+// ===== 音效 =====
+function initAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, type, vol, slide) {
+  if (!soundOn || !audioCtx) return;
+  type = type || 'square'; vol = vol || 0.12; slide = slide || 0;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(); osc.stop(t + dur);
+}
+function chord(freqs, dur, vol) {
+  if (!soundOn) return;
+  freqs.forEach((f, i) => setTimeout(() => tone(f, dur, 'square', vol), i * 55));
+}
+function playSound(name) {
+  switch (name) {
+    case 'move':    tone(300, 0.05, 'square', 0.05, 40); break;
+    case 'rotate':  tone(620, 0.06, 'sine', 0.07, -120); break;
+    case 'drop':    tone(130, 0.12, 'sawtooth', 0.13, -90); break;
+    case 'lock':    tone(190, 0.07, 'square', 0.07); break;
+    case 'clear':   chord([440, 554, 659], 0.16, 0.08); break;
+    case 'tetris':  chord([262, 330, 392, 523, 659], 0.4, 0.11); break;
+    case 'hold':    tone(500, 0.07, 'triangle', 0.08); break;
+    case 'levelup': chord([523, 659, 784, 1046], 0.35, 0.11); break;
+    case 'over':    chord([220, 185, 155, 110], 0.5, 0.11); break;
+  }
+}
+
+// ===== 浮动文字 =====
+function addFloater(text, color, dy) {
+  floaters.push({ text, color: color || '#fff', x: canvas.width / 2, y: 300 + (dy || 0), t: 0, life: 1000 });
+}
+
+// ===== 核心逻辑 =====
+function refillBag() {
+  const p = TYPES.slice();
+  for (let i = p.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [p[i], p[j]] = [p[j], p[i]];
+  }
+  bag.push(...p);
+}
+function nextType() { if (!bag.length) refillBag(); return bag.shift(); }
+function fillQueue() { while (queue.length < 5) queue.push(nextType()); }
+
+function spawn(type) {
+  fillQueue();
+  if (!type) { type = queue.shift(); fillQueue(); }
+  current = { type, rot: 0, x: SPAWN_X[type], y: SPAWN_Y, matrix: ROTATIONS[type][0] };
+  pieceCounts[type] = (pieceCounts[type] || 0) + 1;
+  if (collision(current, 0, 0)) { gameOver(); return false; }
+  canHold = true;
+  grounded = false; lockTimer = 0; lockResets = 0;
+  return true;
+}
+
+function collision(piece, dx, dy, matOverride) {
+  const mat = matOverride || piece.matrix;
+  for (let y = 0; y < mat.length; y++) {
+    for (let x = 0; x < mat.length; x++) {
+      if (!mat[y][x]) continue;
+      const nx = piece.x + x + dx;
+      const ny = piece.y + y + dy;
+      if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+      if (ny >= 0 && grid[ny][nx]) return true;
+    }
+  }
+  return false;
+}
+
+function solidify(piece) {
+  const mat = piece.matrix;
+  for (let y = 0; y < mat.length; y++)
+    for (let x = 0; x < mat.length; x++)
+      if (mat[y][x] && piece.y + y >= 0)
+        grid[piece.y + y][piece.x + x] = piece.type;
+}
+
+function tryMove(dx, dy) {
+  if (!current || state !== 'playing') return false;
+  if (collision(current, dx, dy)) return false;
+  current.x += dx;
+  current.y += dy;
+  if (dy > 0) {
+    if (input.down.held) addScore(1);      // 软降每格 +1
+    grounded = false; lockTimer = 0; lockResets = 0;
+  } else if (dx !== 0) {
+    playSound('move');
+    if (collision(current, 0, 1)) resetLockTimer();
+  }
+  return true;
+}
+
+function tryRotate(dir) {
+  if (!current || state !== 'playing') return false;
+  const oldRot = current.rot;
+  const newRot = (oldRot + (dir === 1 ? 1 : 3)) % 4;
+  const newMat = ROTATIONS[current.type][newRot];
+  const kicks = (current.type === 'I' ? I_KICKS : JLSTZ_KICKS)[oldRot + '>' + newRot] || [[0,0]];
+  for (const k of kicks) {
+    const dx = k[0], dy = -k[1];
+    if (!collision(current, dx, dy, newMat)) {
+      current.rot = newRot;
+      current.matrix = newMat;
+      current.x += dx;
+      current.y += dy;
+      playSound('rotate');
+      if (collision(current, 0, 1)) resetLockTimer();
+      return true;
+    }
+  }
+  return false;
+}
+
+function resetLockTimer() {
+  if (lockResets < MAX_LOCK_RESETS) {
+    lockTimer = 0;
+    lockResets++;
+  }
+}
+
+function hardDrop() {
+  if (!current || state !== 'playing') return;
+  let dist = 0;
+  while (!collision(current, 0, 1)) { current.y++; dist++; }
+  addScore(dist * 2);                       // 硬降每格 +2
+  playSound('drop');
+  lockPiece();
+}
+
+function hold() {
+  if (!current || state !== 'playing' || !canHold) return;
+  playSound('hold');
+  const held = current.type;
+  if (holdType) {
+    const tmp = holdType;
+    holdType = held;
+    spawn(tmp);
+  } else {
+    holdType = held;
+    spawn();
+  }
+  canHold = false;
+  updateUI();
+}
+
+function lockPiece() {
+  const mat = current.matrix;
+  let anyVisible = false;
+  for (let y = 0; y < mat.length; y++)
+    for (let x = 0; x < mat.length; x++)
+      if (mat[y][x] && current.y + y >= HIDDEN_ROWS) anyVisible = true;
+  solidify(current);
+  playSound('lock');
+  if (!anyVisible) { gameOver(); return; }  // Lock Out
+  clearLines();
+}
+
+function clearLines() {
+  clearingRows = [];
+  for (let y = HIDDEN_ROWS; y < ROWS; y++)
+    if (grid[y].every(c => c !== null)) clearingRows.push(y);
+  if (clearingRows.length > 0) {
+    state = 'clearing';
+    clearAnimTimer = 0;
+    playSound(clearingRows.length === 4 ? 'tetris' : 'clear');
+  } else {
+    afterClear(0);
+  }
+}
+
+function afterClear(count) {
+  if (count > 0) {
+    // 经典 NES 计分：基础分 × 消除发生时的等级
+    const gained = LINE_SCORES[count] * level;
+    addScore(gained);
+    linesCleared += count;
+    addFloater('+' + gained, count === 4 ? '#ffd54a' : '#fff', 20);
+    if (count === 4) addFloater('TETRIS!', '#ffd54a', -14);
+    const newLevel = Math.floor(linesCleared / 10) + 1;
+    if (newLevel > level) {
+      level = newLevel;
+      addFloater('LEVEL ' + level, '#9dff57', -48);
+      playSound('levelup');
+    }
+  }
+  if (!spawn()) return;
+  updateUI();
+}
+
+function addScore(n) {
+  score += n;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('tetris-highscore', String(highScore));
+  }
+}
+
+function getDropInterval() {
+  // NES 原版帧率表 → 毫秒
+  const idx = Math.min(level - 1, NES_GRAVITY_FRAMES.length - 1);
+  return NES_GRAVITY_FRAMES[idx] * 1000 / 60;
+}
+
+const TITLE_HTML = '<i style="color:#ff4d6d">T</i><i style="color:#ff9f1c">E</i><i style="color:#ffdd00">T</i><i style="color:#00ff7e">R</i><i style="color:#00e5ff">I</i><i style="color:#3c9dff">S</i>';
+
+function gameOver() {
+  state = 'over';
+  playSound('over');
+  ovTitle.innerHTML = '<span style="color:#ff4040">GAME OVER</span>';
+  ovText.innerHTML = 'SCORE <b>' + pad6(score) + '</b> · TOP <b>' + pad6(highScore) + '</b><br>'
+    + 'LINES ' + linesCleared + ' · LEVEL ' + pad2(level)
+    + (score >= highScore && score > 0 ? '<br><span class="blink" style="color:#ffd54a">★ NEW RECORD ★</span>' : '');
+  startBtn.textContent = '▶ RETRY';
+  showOverlay();
+}
+
+function resetGame() {
+  initGrid();
+  score = 0; linesCleared = 0; level = 1;
+  holdType = null; canHold = true;
+  queue = []; bag = [];
+  pieceCounts = {};
+  clearingRows = []; floaters = [];
+  dropTimer = 0; lockTimer = 0; lockResets = 0; grounded = false;
+  current = null;
+  state = 'playing';
+  hideOverlay();
+  spawn();
+  updateUI();
+}
+
+function togglePause() {
+  if (state === 'playing') {
+    state = 'paused';
+    ovTitle.innerHTML = 'PAUSE';
+    ovText.innerHTML = '<span class="blink">PRESS P TO RESUME</span>';
+    startBtn.textContent = '▶ RESUME';
+    showOverlay();
+  } else if (state === 'paused') {
+    state = 'playing';
+    hideOverlay();
+  }
+  syncPauseBtn();
+}
+
+function showOverlay() { overlay.classList.remove('hidden'); }
+function hideOverlay() { overlay.classList.add('hidden'); }
+function syncPauseBtn() {
+  pauseBtn.textContent = state === 'paused' ? 'RESUME' : 'PAUSE';
+}
+function pad6(n) { return String(n).padStart(6, '0'); }
+function pad2(n) { return String(Math.min(n, 99)).padStart(2, '0'); }
+function pad3(n) { return String(Math.min(n, 999)).padStart(3, '0'); }
+
+// ===== 渲染 =====
+function drawBoard() {
+  // 原版纯黑底，无网格线
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 已锁定方块
+  for (let y = HIDDEN_ROWS; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++)
+      if (grid[y][x])
+        ctx.drawImage(SPRITES[grid[y][x]], x * BLOCK, (y - HIDDEN_ROWS) * BLOCK);
+
+  if (current && (state === 'playing' || state === 'clearing' || state === 'paused')) {
+    // 幽灵块（描边轮廓）
+    let gy = current.y;
+    while (!collision({ x: current.x, y: gy, matrix: current.matrix }, 0, 1)) gy++;
+    if (gy !== current.y) drawPieceAt(current, gy, GHOST_SPRITE);
+    // 当前方块
+    drawPieceAt(current, current.y, SPRITES[current.type]);
+  }
+
+  // 消行动画（原版白闪）
+  if (state === 'clearing') {
+    const p = clearAnimTimer / CLEAR_ANIM_MS;
+    const alpha = 0.4 + 0.5 * Math.abs(Math.sin(p * Math.PI * 3));
+    ctx.fillStyle = 'rgba(255,255,255,' + alpha.toFixed(3) + ')';
+    for (const y of clearingRows)
+      ctx.fillRect(0, (y - HIDDEN_ROWS) * BLOCK, COLS * BLOCK, BLOCK);
+  }
+
+  // 危险提示（堆叠接近顶部泛红）
+  if (state === 'playing' && isDanger()) {
+    const g = ctx.createLinearGradient(0, 0, 0, 150);
+    g.addColorStop(0, 'rgba(255,60,80,0.22)');
+    g.addColorStop(1, 'rgba(255,60,80,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, COLS * BLOCK, 150);
+  }
+
+  // 浮动文字（像素字体）
+  for (const f of floaters) {
+    const p = f.t / f.life;
+    const alpha = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
+    const y = f.y - p * 44;
+    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.font = '13px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#000';
+    ctx.fillText(f.text, f.x + 2, y + 2);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x, y);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawPieceAt(piece, gridY, sprite) {
+  const mat = piece.matrix;
+  for (let y = 0; y < mat.length; y++) {
+    for (let x = 0; x < mat.length; x++) {
+      if (!mat[y][x]) continue;
+      const sy = gridY + y - HIDDEN_ROWS;
+      if (sy < 0) continue;
+      ctx.drawImage(sprite, (piece.x + x) * BLOCK, sy * BLOCK);
+    }
+  }
+}
+
+function isDanger() {
+  for (let y = HIDDEN_ROWS; y < HIDDEN_ROWS + 5; y++)
+    if (grid[y].some(c => c !== null)) return true;
+  return false;
+}
+
+// 迷你预览
+function drawPieceMini(targetCtx, type, boxW, boxH, offY, cell) {
+  const mat = ROTATIONS[type][0];
+  const size = cell || 18;
+  let minX = 9, maxX = -1, minY = 9, maxY = -1;
+  for (let y = 0; y < mat.length; y++)
+    for (let x = 0; x < mat.length; x++)
+      if (mat[y][x]) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+  const w = (maxX - minX + 1) * size;
+  const h = (maxY - minY + 1) * size;
+  const startX = (boxW - w) / 2;
+  const startY = offY + (boxH - h) / 2;
+  for (let y = minY; y <= maxY; y++)
+    for (let x = minX; x <= maxX; x++)
+      if (mat[y][x])
+        targetCtx.drawImage(SPRITES[type], startX + (x - minX) * size, startY + (y - minY) * size, size, size);
+}
+
+function drawHold() {
+  holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+  if (holdType) {
+    if (!canHold) holdCtx.globalAlpha = 0.3;
+    drawPieceMini(holdCtx, holdType, 120, 70, 0, 15);
+    holdCtx.globalAlpha = 1;
+  }
+}
+
+function drawNext() {
+  nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+  // 原版只显示 1 个 NEXT
+  if (queue.length) drawPieceMini(nextCtx, queue[0], 120, 80, 0, 17);
+}
+
+// ===== STATISTICS（原版掉落统计） =====
+function buildStats() {
+  const list = $('statsList');
+  list.innerHTML = '';
+  for (const t of TYPES) {
+    const row = document.createElement('div');
+    row.className = 'stat-row';
+    const c = document.createElement('canvas');
+    c.width = 56; c.height = 26;
+    drawPieceMini(c.getContext('2d'), t, 56, 26, 0, 6);
+    const span = document.createElement('span');
+    span.id = 'stat-' + t;
+    span.textContent = '000';
+    row.appendChild(c);
+    row.appendChild(span);
+    list.appendChild(row);
+  }
+}
+function updateStats() {
+  for (const t of TYPES) {
+    const el = $('stat-' + t);
+    if (el) el.textContent = pad3(pieceCounts[t] || 0);
+  }
+}
+
+function updateUI() {
+  $('score').textContent = pad6(score);
+  $('highScore').textContent = pad6(highScore);
+  $('level').textContent = pad2(level);
+  $('lines').textContent = 'LINES-' + pad3(linesCleared);
+  updateStats();
+  drawHold();
+  drawNext();
+}
+
+// ===== 输入 =====
+function setDir(dir, down) {
+  const o = input[dir];
+  o.held = down;
+  o.t = 0;
+  o.repeated = false;
+  if (down) tryMove(dir === 'left' ? -1 : 1, 0);
+}
+
+function keyDown(e) {
+  const code = e.code;
+  const gameKeys = ['ArrowLeft','ArrowRight','ArrowDown','ArrowUp','Space','KeyZ','KeyX','KeyC','KeyA','KeyD','KeyS'];
+  if (gameKeys.includes(code)) e.preventDefault();
+
+  if (code === 'KeyH') { toggleHelp(); return; }
+  if (helpOpen) {
+    if (code === 'Escape' || code === 'Enter') closeHelp();
+    return;
+  }
+  if ((code === 'Enter' || code === 'Space') && (state === 'menu' || state === 'over')) {
+    initAudio(); resetGame(); return;
+  }
+  if (code === 'KeyP' || code === 'Escape') {
+    if (state === 'playing' || state === 'paused') togglePause();
+    return;
+  }
+  if (code === 'KeyR') { initAudio(); resetGame(); return; }
+  if (state !== 'playing') return;
+  if (e.repeat) return; // 长按连发由 DAS 逻辑处理
+
+  switch (code) {
+    case 'ArrowLeft': case 'KeyA': setDir('left', true); break;
+    case 'ArrowRight': case 'KeyD': setDir('right', true); break;
+    case 'ArrowDown': case 'KeyS': input.down.held = true; break;
+    case 'ArrowUp': case 'KeyX': tryRotate(1); break;
+    case 'KeyZ': tryRotate(-1); break;
+    case 'Space': hardDrop(); break;
+    case 'KeyC': case 'ShiftLeft': case 'ShiftRight': hold(); break;
+  }
+}
+function keyUp(e) {
+  const code = e.code;
+  if (code === 'ArrowLeft' || code === 'KeyA') input.left.held = false;
+  if (code === 'ArrowRight' || code === 'KeyD') input.right.held = false;
+  if (code === 'ArrowDown' || code === 'KeyS') input.down.held = false;
+}
+
+// ===== 主循环 =====
+function update(dt) {
+  for (const dir of ['left', 'right']) {
+    const o = input[dir];
+    if (!o.held) continue;
+    o.t += dt;
+    if (!o.repeated && o.t >= DAS) {
+      o.repeated = true;
+      o.t -= DAS;
+      tryMove(dir === 'left' ? -1 : 1, 0);
+    } else if (o.repeated) {
+      while (o.t >= ARR) {
+        o.t -= ARR;
+        tryMove(dir === 'left' ? -1 : 1, 0);
+      }
+    }
+  }
+  if (!current) return;
+
+  const interval = input.down.held ? SOFT_DROP_INTERVAL : getDropInterval();
+  dropTimer += dt;
+  let guard = 0;
+  while (dropTimer >= interval && guard++ < 25) {
+    dropTimer -= interval;
+    if (!tryMove(0, 1)) break;
+  }
+  if (!current) return;
+
+  if (collision(current, 0, 1)) {
+    if (!grounded) { grounded = true; lockTimer = 0; }
+    lockTimer += dt;
+    if (lockTimer >= LOCK_DELAY) lockPiece();
+  }
+}
+
+function gameLoop(ts) {
+  const dt = Math.min(ts - lastTime, 100);
+  lastTime = ts;
+
+  if (state === 'playing') {
+    update(dt);
+  } else if (state === 'clearing') {
+    clearAnimTimer += dt;
+    if (clearAnimTimer >= CLEAR_ANIM_MS) {
+      const count = clearingRows.length;
+      clearingRows.sort((a, b) => b - a);
+      for (const y of clearingRows) {
+        grid.splice(y, 1);
+        grid.unshift(Array(COLS).fill(null));
+      }
+      clearingRows = [];
+      state = 'playing';
+      afterClear(count);
+    }
+  }
+
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    floaters[i].t += dt;
+    if (floaters[i].t >= floaters[i].life) floaters.splice(i, 1);
+  }
+
+  drawBoard();
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== 玩法说明弹窗 =====
+function openHelp() {
+  helpOpen = true;
+  helpMask.classList.add('open');
+  if (state === 'playing') {
+    autoPausedByHelp = true;
+    state = 'paused';
+    syncPauseBtn();
+  }
+}
+function closeHelp() {
+  helpOpen = false;
+  helpMask.classList.remove('open');
+  if (autoPausedByHelp) {
+    autoPausedByHelp = false;
+    state = 'playing';
+    syncPauseBtn();
+  }
+}
+function toggleHelp() { helpOpen ? closeHelp() : openHelp(); }
+
+// ===== 事件绑定 =====
+window.addEventListener('keydown', keyDown);
+window.addEventListener('keyup', keyUp);
+
+startBtn.addEventListener('click', () => {
+  initAudio();
+  if (state === 'paused') togglePause();
+  else resetGame();
+});
+$('ovHelpBtn').addEventListener('click', openHelp);
+helpBtn.addEventListener('click', () => { initAudio(); openHelp(); });
+$('helpCloseBtn').addEventListener('click', () => {
+  closeHelp();
+  if (state === 'menu' || state === 'over') { initAudio(); resetGame(); }
+});
+helpMask.addEventListener('click', e => { if (e.target === helpMask) closeHelp(); });
+
+pauseBtn.addEventListener('click', () => {
+  initAudio();
+  if (state === 'menu' || state === 'over') resetGame();
+  else togglePause();
+});
+restartBtn.addEventListener('click', () => { initAudio(); resetGame(); });
+muteBtn.addEventListener('click', () => {
+  soundOn = !soundOn;
+  muteBtn.classList.toggle('active', soundOn);
+});
+
+// 移动端按钮
+document.querySelectorAll('[data-action]').forEach(btn => {
+  const action = btn.dataset.action;
+  btn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    initAudio();
+    if (state !== 'playing') return;
+    switch (action) {
+      case 'left': setDir('left', true); break;
+      case 'right': setDir('right', true); break;
+      case 'soft': input.down.held = true; break;
+      case 'ccw': tryRotate(-1); break;
+      case 'cw': tryRotate(1); break;
+      case 'hold': hold(); break;
+      case 'drop': hardDrop(); break;
+    }
+  }, { passive: false });
+  const end = e => {
+    e.preventDefault();
+    if (action === 'left') input.left.held = false;
+    if (action === 'right') input.right.held = false;
+    if (action === 'soft') input.down.held = false;
+  };
+  btn.addEventListener('touchend', end);
+  btn.addEventListener('touchcancel', end);
+  btn.addEventListener('mousedown', () => {
+    initAudio();
+    if (state !== 'playing') return;
+    switch (action) {
+      case 'left': setDir('left', true); setTimeout(() => input.left.held = false, 150); break;
+      case 'right': setDir('right', true); setTimeout(() => input.right.held = false, 150); break;
+      case 'soft': input.down.held = true; setTimeout(() => input.down.held = false, 180); break;
+      case 'ccw': tryRotate(-1); break;
+      case 'cw': tryRotate(1); break;
+      case 'hold': hold(); break;
+      case 'drop': hardDrop(); break;
+    }
+  });
+});
+
+// ===== 初始化 =====
+initGrid();
+buildStats();
+highScore = parseInt(localStorage.getItem('tetris-highscore') || '0', 10) || 0;
+updateUI();
+syncPauseBtn();
+requestAnimationFrame(gameLoop);
+})();
+</script>
+</body>
+</html>
