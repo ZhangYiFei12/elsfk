@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>扫雷</title>
+<style>
+  :root {
+    --bg: #c0c0c0;
+    --dark: #808080;
+    --light: #ffffff;
+    --red: #ff0000;
+    --cell: 26px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #008080;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Times New Roman', serif;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow: auto;
+  }
+  .outer {
+    border-top: 3px solid #dfdfdf;
+    border-left: 3px solid #dfdfdf;
+    border-right: 3px solid #404040;
+    border-bottom: 3px solid #404040;
+    background: var(--bg);
+    box-shadow: 6px 6px 0 rgba(0,0,0,.35), 0 0 40px rgba(0,0,0,.25);
+    padding: 6px;
+    margin: 16px;
+  }
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(90deg, #000080, #1084d0);
+    color: #fff;
+    font-weight: bold;
+    font-size: 13px;
+    font-family: 'Microsoft YaHei', sans-serif;
+    padding: 3px 4px;
+    margin-bottom: 4px;
+    border-top: 2px solid #dfdfdf;
+    border-left: 2px solid #dfdfdf;
+    border-right: 2px solid #dfdfdf;
+  }
+  .titlebar .icon { width: 16px; height: 16px; }
+  .titlebar .btns { margin-left: auto; display: flex; gap: 2px; }
+  .titlebar .winbtn {
+    width: 18px; height: 16px; line-height: 14px;
+    font-size: 11px; font-family: Arial, sans-serif; font-weight: bold;
+    text-align: center;
+    background: var(--bg); color: #000;
+    border-top: 1px solid #fff; border-left: 1px solid #fff;
+    border-right: 1px solid #404040; border-bottom: 1px solid #404040;
+    cursor: pointer;
+  }
+  .toolbar {
+    border-top: 2px solid var(--dark);
+    border-left: 2px solid var(--dark);
+    border-right: 2px solid var(--light);
+    border-bottom: 2px solid var(--light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 5px;
+    margin-bottom: 6px;
+    gap: 8px;
+  }
+  .toolbar .right { display: flex; align-items: center; gap: 8px; }
+  .lcd {
+    background: #000;
+    font-family: 'DSEG', 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 26px;
+    line-height: 30px;
+    letter-spacing: 3px;
+    padding: 1px 4px;
+    border-top: 1px solid var(--dark);
+    border-left: 1px solid var(--dark);
+    border-right: 1px solid var(--light);
+    border-bottom: 1px solid var(--light);
+    min-width: 74px;
+    text-align: center;
+    color: #ff2400;
+    text-shadow: 0 0 6px rgba(255,40,0,.75);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  #face {
+    width: 38px; height: 38px;
+    font-size: 22px;
+    background: var(--bg);
+    border-top: 3px solid var(--light);
+    border-left: 3px solid var(--light);
+    border-right: 3px solid var(--dark);
+    border-bottom: 3px solid var(--dark);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  #face:active, #face.pressed {
+    border-top: 3px solid var(--dark);
+    border-left: 3px solid var(--dark);
+    border-right: 3px solid var(--light);
+    border-bottom: 3px solid var(--light);
+  }
+  #menuBtn {
+    height: 26px;
+    font-family: 'Microsoft YaHei', sans-serif;
+    font-size: 13px;
+    background: var(--bg);
+    border-top: 2px solid var(--light);
+    border-left: 2px solid var(--light);
+    border-right: 2px solid var(--dark);
+    border-bottom: 2px solid var(--dark);
+    padding: 0 8px;
+    cursor: pointer;
+  }
+  #menuBtn:active {
+    border-top: 2px solid var(--dark);
+    border-left: 2px solid var(--dark);
+    border-right: 2px solid var(--light);
+    border-bottom: 2px solid var(--light);
+  }
+  #board {
+    border-top: 3px solid var(--dark);
+    border-left: 3px solid var(--dark);
+    border-right: 3px solid var(--light);
+    border-bottom: 3px solid var(--light);
+    display: grid;
+    width: max-content;
+  }
+  .cell {
+    width: var(--cell); height: var(--cell);
+    font-size: calc(var(--cell) * 0.62);
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Arial, sans-serif;
+    line-height: 1;
+    position: relative;
+  }
+  .cell svg { width: 76%; height: 76%; display: block; }
+  .cell.hidden {
+    background: var(--bg);
+    border-top: 2px solid var(--light);
+    border-left: 2px solid var(--light);
+    border-right: 2px solid var(--dark);
+    border-bottom: 2px solid var(--dark);
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .cell.hidden:hover { filter: brightness(1.06); }
+  }
+  .cell.revealed {
+    background: #bdbdbd;
+    border: 1px solid var(--dark);
+    border-width: 0 0 1px 1px;
+  }
+  .cell.pop { animation: pop .12s ease-out; }
+  @keyframes pop { from { transform: scale(.75); } to { transform: scale(1); } }
+  .cell.mine-boom { background: #ff0000 !important; }
+  .cell.explode { animation: shake .35s; }
+  @keyframes shake {
+    0%,100% { transform: translate(0,0); }
+    25% { transform: translate(-2px,1px); }
+    50% { transform: translate(2px,-1px); }
+    75% { transform: translate(-1px,-2px); }
+  }
+  .cell.win-mine { animation: winPulse .8s ease-in-out infinite alternate; }
+  @keyframes winPulse { from { filter: brightness(1); } to { filter: brightness(1.6); } }
+  .n1 { color: #0000ff; }
+  .n2 { color: #008000; }
+  .n3 { color: #ff0000; }
+  .n4 { color: #000080; }
+  .n5 { color: #800000; }
+  .n6 { color: #008080; }
+  .n7 { color: #000000; }
+  .n8 { color: #808080; }
+  .menu-panel {
+    position: fixed;
+    background: var(--bg);
+    border-top: 2px solid var(--light);
+    border-left: 2px solid var(--light);
+    border-right: 2px solid var(--dark);
+    border-bottom: 2px solid var(--dark);
+    box-shadow: 3px 3px 6px rgba(0,0,0,.35);
+    padding: 3px;
+    font-family: 'Microsoft YaHei', sans-serif;
+    font-size: 13px;
+    display: none;
+    z-index: 20;
+  }
+  .menu-item {
+    padding: 5px 22px 5px 24px;
+    cursor: pointer;
+    position: relative;
+    white-space: nowrap;
+  }
+  .menu-item:hover { background: #000080; color: #fff; }
+  .menu-item.checked::before {
+    content: '✔';
+    position: absolute; left: 6px;
+  }
+  .menu-sep { height: 2px; margin: 3px 2px; border-bottom: 1px solid var(--dark); border-top: 1px solid var(--light); }
+  .best-tag { color: #000080; margin-left: 8px; font-size: 12px; }
+  .menu-item:hover .best-tag { color: #ffff80; }
+  /* 自定义对话框 */
+  .dialog-mask {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.25);
+    display: none;
+    justify-content: center; align-items: center;
+    z-index: 30;
+  }
+  .dialog {
+    background: var(--bg);
+    border-top: 2px solid var(--light);
+    border-left: 2px solid var(--light);
+    border-right: 2px solid var(--dark);
+    border-bottom: 2px solid var(--dark);
+    box-shadow: 4px 4px 10px rgba(0,0,0,.4);
+    padding: 0;
+    font-family: 'Microsoft YaHei', sans-serif;
+    min-width: 240px;
+  }
+  .dialog .titlebar { cursor: default; margin-bottom: 0; }
+  .dialog .body { padding: 14px 16px; display: grid; grid-template-columns: auto auto; gap: 8px 10px; align-items: center; font-size: 13px; }
+  .dialog label { text-align: right; }
+  .dialog input {
+    width: 70px;
+    font-size: 13px;
+    background: #fff;
+    border-top: 2px solid var(--dark);
+    border-left: 2px solid var(--dark);
+    border-right: 2px solid var(--light);
+    border-bottom: 2px solid var(--light);
+    padding: 2px 4px;
+    outline: none;
+    font-family: Arial, sans-serif;
+  }
+  .dialog .btns {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .dialog button {
+    min-width: 70px;
+    font-family: 'Microsoft YaHei', sans-serif;
+    font-size: 13px;
+    background: var(--bg);
+    border-top: 2px solid var(--light);
+    border-left: 2px solid var(--light);
+    border-right: 2px solid var(--dark);
+    border-bottom: 2px solid var(--dark);
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  .dialog button:active {
+    border-top: 2px solid var(--dark);
+    border-left: 2px solid var(--dark);
+    border-right: 2px solid var(--light);
+    border-bottom: 2px solid var(--light);
+  }
+  /* 小屏自适应：按棋盘宽度缩放格子 */
+  @media (max-width: 760px) {
+    body { align-items: flex-start; }
+    .outer { margin: 8px; }
+    :root { --cell: 22px; }
+    .lcd { font-size: 21px; min-width: 60px; letter-spacing: 2px; }
+    #face { width: 32px; height: 32px; font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="outer">
+  <div class="titlebar">
+    <svg class="icon" viewBox="0 0 16 16"><rect width="16" height="16" fill="#c0c0c0"/><circle cx="8" cy="9" r="4" fill="#000"/><rect x="7" y="2" width="2" height="4" fill="#000"/><circle cx="7" cy="8" r="1.4" fill="#fff"/></svg>
+    <span>扫雷</span>
+    <div class="btns"><span class="winbtn">_</span><span class="winbtn">□</span><span class="winbtn">×</span></div>
+  </div>
+  <div class="toolbar">
+    <div class="lcd" id="mines">010</div>
+    <div class="right">
+      <button id="face" title="新游戏 (F2)">🙂</button>
+      <button id="menuBtn">菜单 ▾</button>
+    </div>
+    <div class="lcd" id="timer">000</div>
+  </div>
+  <div id="board"></div>
+</div>
+
+<div class="menu-panel" id="menuPanel">
+  <div class="menu-item" data-level="beginner">初级 9×9 / 10雷<span class="best-tag" data-best="beginner"></span></div>
+  <div class="menu-item" data-level="intermediate">中级 16×16 / 40雷<span class="best-tag" data-best="intermediate"></span></div>
+  <div class="menu-item" data-level="expert">高级 30×16 / 99雷<span class="best-tag" data-best="expert"></span></div>
+  <div class="menu-sep"></div>
+  <div class="menu-item" data-action="custom">自定义…</div>
+  <div class="menu-sep"></div>
+  <div class="menu-item" data-action="help">玩法说明</div>
+  <div class="menu-item" data-action="clearbest">清除最佳纪录</div>
+</div>
+
+<div class="dialog-mask" id="helpMask">
+  <div class="dialog" style="max-width: 420px;">
+    <div class="titlebar"><span>玩法说明</span><div class="btns"><span class="winbtn" id="helpClose">×</span></div></div>
+    <div class="body" style="display:block; font-size:13px; line-height:1.9;">
+      <b>🎯 目标</b><br>
+      翻开所有不含地雷的格子。踩到地雷即失败。<br><br>
+      <b>🖱️ 操作</b><br>
+      · <b>左键点击</b> — 翻开格子（首次点击必定安全）<br>
+      · <b>右键点击</b> — 插旗 🚩 → 再点变问号 ❓ → 再点取消<br>
+      · <b>双击 / 左右键同按</b> 数字 — 若周围旗数与数字相等，快速翻开周围其余格子（连点技巧）<br>
+      · <b>触屏</b> — 点按翻开，长按 400ms 插旗<br>
+      · <b>F2 / 点笑脸</b> — 重新开始<br><br>
+      <b>🔢 数字含义</b><br>
+      格子上的数字表示它周围 8 格中共有多少颗地雷，可用来推理雷的位置。<br><br>
+      <b>🏆 计分</b><br>
+      计时器记录用时，三个经典难度的最佳成绩会自动保存。<br><br>
+      <b>💡 新手提示</b><br>
+      先从边角和数字密集处推理；旗只是标记，不插旗也能赢；雷数显示为剩余未插旗的雷数（可为负）。<br>
+      <div class="btns"><button id="helpOk">知道了</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="dialog-mask" id="customMask">
+  <div class="dialog">
+    <div class="titlebar"><span>自定义游戏</span><div class="btns"><span class="winbtn" id="dlgClose">×</span></div></div>
+    <div class="body">
+      <label for="inCols">高度 (9–24)：</label><input id="inRows" type="number" min="9" max="24" value="9">
+      <label for="inCols">宽度 (9–30)：</label><input id="inCols" type="number" min="9" max="30" value="9">
+      <label for="inMines">雷数：</label><input id="inMines" type="number" min="10" value="10">
+      <div class="btns">
+        <button id="dlgOk">确定</button>
+        <button id="dlgCancel">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const LEVELS = {
+    beginner:     { cols: 9,  rows: 9,  mines: 10 },
+    intermediate: { cols: 16, rows: 16, mines: 40 },
+    expert:       { cols: 30, rows: 16, mines: 99 }
+  };
+  let cols = 9, rows = 9, mines = 10, levelName = 'beginner';
+
+  let grid, revealed, flagged, question, started, dead, won, timer, seconds, flagsLeft;
+  const board = document.getElementById('board');
+  const face = document.getElementById('face');
+  const minesEl = document.getElementById('mines');
+  const timerEl = document.getElementById('timer');
+  const menuBtn = document.getElementById('menuBtn');
+  const menuPanel = document.getElementById('menuPanel');
+
+  // —— 经典地雷 / 旗帜用 SVG 绘制（更接近原版位图） ——
+  const MINE_SVG = `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.6" fill="#000"/><rect x="7.2" y="1" width="1.6" height="14" fill="#000"/><rect x="1" y="7.2" width="14" height="1.6" fill="#000"/><path d="M3 3 L13 13 M13 3 L3 13" stroke="#000" stroke-width="1.4"/><circle cx="6.5" cy="6.5" r="1.3" fill="#fff"/></svg>`;
+  const FLAG_SVG = `<svg viewBox="0 0 16 16"><path d="M7 2 L7 9 L2.5 6.8 Z" fill="#f00" transform="translate(1,0)"/><rect x="8.4" y="2" width="1.4" height="9" fill="#000"/><rect x="4.5" y="11" width="8" height="2" fill="#000"/><rect x="5.5" y="9.6" width="6" height="1.4" fill="#000"/></svg>`;
+  const WRONG_SVG = `<svg viewBox="0 0 16 16">${FLAG_SVG.replace(/^<svg[^>]*>|<\/svg>$/g,'')}<path d="M2 2 L14 14 M14 2 L2 14" stroke="#f00" stroke-width="2"/></svg>`;
+
+  function pad(n) {
+    if (n < 0) return '-' + String(Math.min(Math.abs(n), 99)).padStart(2, '0');
+    return String(Math.min(n, 999)).padStart(3, '0');
+  }
+
+  // —— 最佳成绩（localStorage） ——
+  function getBests() { try { return JSON.parse(localStorage.getItem('ms_best') || '{}'); } catch { return {}; } }
+  function saveBest(name, t) {
+    const b = getBests();
+    if (!(name in b) || t < b[name]) { b[name] = t; localStorage.setItem('ms_best', JSON.stringify(b)); return true; }
+    return false;
+  }
+  function renderBests() {
+    const b = getBests();
+    document.querySelectorAll('[data-best]').forEach(el => {
+      const t = b[el.dataset.best];
+      el.textContent = t != null ? `${t}s` : '';
+    });
+  }
+
+  function init(c, r, m, name) {
+    cols = c; rows = r; mines = m; levelName = name || 'custom';
+    grid = new Array(cols * rows).fill(0);
+    revealed = new Array(cols * rows).fill(false);
+    flagged = new Array(cols * rows).fill(false);
+    question = new Array(cols * rows).fill(false);
+    started = false; dead = false; won = false;
+    seconds = 0; flagsLeft = mines;
+    clearInterval(timer); timer = null;
+    timerEl.textContent = pad(0);
+    minesEl.textContent = pad(flagsLeft);
+    face.textContent = '🙂';
+    document.documentElement.style.setProperty('--cell', (cols > 20 ? Math.min(26, Math.max(20, Math.floor((window.innerWidth - 80) / cols))) : 26) + 'px');
+    board.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+    buildBoard();
+    markChecked();
+    renderBests();
+  }
+
+  function markChecked() {
+    document.querySelectorAll('.menu-item[data-level]').forEach(el =>
+      el.classList.toggle('checked', el.dataset.level === levelName));
+  }
+
+  function buildBoard() {
+    board.innerHTML = '';
+    for (let i = 0; i < cols * rows; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell hidden';
+      cell.dataset.i = i;
+      board.appendChild(cell);
+    }
+  }
+
+  function neighbors(i) {
+    const x = i % cols, y = (i / cols) | 0;
+    const out = [];
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) out.push(ny * cols + nx);
+      }
+    return out;
+  }
+
+  function placeMines(safe) {
+    const banned = new Set([safe, ...neighbors(safe)]);
+    let placed = 0;
+    while (placed < mines) {
+      const p = (Math.random() * cols * rows) | 0;
+      if (grid[p] === -1 || banned.has(p)) continue;
+      grid[p] = -1; placed++;
+    }
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i] === -1) continue;
+      let n = 0;
+      for (const j of neighbors(i)) if (grid[j] === -1) n++;
+      grid[i] = n;
+    }
+  }
+
+  function startTimer() {
+    timer = setInterval(() => {
+      seconds = Math.min(seconds + 1, 999);
+      timerEl.textContent = pad(seconds);
+    }, 1000);
+  }
+
+  function reveal(i) {
+    if (dead || won || revealed[i] || flagged[i]) return;
+    if (!started) { placeMines(i); started = true; startTimer(); }
+    if (question[i]) question[i] = false;
+    floodReveal(i);
+    checkWin();
+  }
+
+  function floodReveal(i, animate) {
+    if (revealed[i] || flagged[i] || dead) return;
+    revealed[i] = true;
+    const cell = board.children[i];
+    cell.classList.remove('hidden');
+    cell.classList.add('revealed');
+    if (animate) { cell.classList.add('pop'); setTimeout(() => cell.classList.remove('pop'), 130); }
+    if (grid[i] === -1) { boom(i); return; }
+    if (grid[i] > 0) {
+      cell.textContent = grid[i];
+      cell.classList.add('n' + grid[i]);
+      return;
+    }
+    for (const j of neighbors(i)) if (!revealed[j]) floodReveal(j, false);
+  }
+
+  function boom(i) {
+    dead = true;
+    clearInterval(timer);
+    face.textContent = '😵';
+    const c = board.children[i];
+    c.classList.add('mine-boom', 'explode');
+    c.innerHTML = MINE_SVG;
+    for (let k = 0; k < grid.length; k++) {
+      if (k === i) continue;
+      const cell = board.children[k];
+      if (grid[k] === -1 && !flagged[k]) {
+        cell.classList.remove('hidden');
+        cell.classList.add('revealed');
+        cell.innerHTML = MINE_SVG;
+      } else if (grid[k] !== -1 && flagged[k]) {
+        cell.classList.remove('hidden');
+        cell.classList.add('revealed');
+        cell.innerHTML = WRONG_SVG;
+      }
+    }
+  }
+
+  function cycleFlag(i) {
+    if (dead || won || revealed[i]) return;
+    const cell = board.children[i];
+    if (flagged[i]) {
+      flagged[i] = false; question[i] = true;
+      cell.textContent = '❓';
+      flagsLeft++;
+    } else if (question[i]) {
+      question[i] = false;
+      cell.innerHTML = '';
+    } else {
+      flagged[i] = true;
+      cell.innerHTML = FLAG_SVG;
+      flagsLeft--;
+    }
+    minesEl.textContent = pad(flagsLeft);
+    checkWin();
+  }
+
+  function checkWin() {
+    if (dead) return;
+    let rem = 0;
+    for (let i = 0; i < grid.length; i++)
+      if (!revealed[i] && grid[i] !== -1) rem++;
+    if (rem === 0) {
+      won = true;
+      clearInterval(timer);
+      face.textContent = '😎';
+      minesEl.textContent = pad(0);
+      for (let i = 0; i < grid.length; i++)
+        if (grid[i] === -1 && !flagged[i]) {
+          board.children[i].innerHTML = FLAG_SVG;
+          board.children[i].classList.add('win-mine');
+        }
+      if (levelName in LEVELS && seconds > 0) {
+        const isRecord = saveBest(levelName, seconds);
+        renderBests();
+        if (isRecord) setTimeout(() => alert(`🎉 新纪录！${LEVELS[levelName] ? ({beginner:'初级',intermediate:'中级',expert:'高级'})[levelName] : ''} 最佳成绩：${seconds} 秒`), 250);
+      }
+    }
+  }
+
+  function chord(i) {
+    if (!revealed[i] || grid[i] === 0 || dead || won) return;
+    let flags = 0;
+    for (const j of neighbors(i)) if (flagged[j]) flags++;
+    if (flags !== grid[i]) return;
+    for (const j of neighbors(i))
+      if (!flagged[j] && !revealed[j]) floodReveal(j, true);
+    checkWin();
+  }
+
+  // —— 鼠标 / 触屏 ——
+  let mouseDownOn = null, chordDown = false;
+  board.addEventListener('mousedown', e => {
+    if (dead || won) return;
+    const cell = e.target.closest('.cell');
+    if (!cell) return;
+    if (e.button === 0) {
+      mouseDownOn = +cell.dataset.i;
+      if (!revealed[mouseDownOn]) face.textContent = '😮';
+      if (e.buttons === 3 || e.button === 1) { chordDown = true; face.textContent = '😮'; }
+    }
+  });
+  board.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const cell = e.target.closest('.cell');
+    if (cell) cycleFlag(+cell.dataset.i);
+  });
+  window.addEventListener('mouseup', e => {
+    if (chordDown && mouseDownOn !== null) {
+      if (!dead && !won) face.textContent = '🙂';
+      chord(mouseDownOn);
+      chordDown = false;
+    } else if (e.button === 0 && mouseDownOn !== null) {
+      if (!dead && !won) face.textContent = '🙂';
+      if (e.target.closest && board.contains(e.target)) reveal(mouseDownOn);
+    }
+    mouseDownOn = null;
+  });
+  board.addEventListener('dblclick', e => {
+    const cell = e.target.closest('.cell');
+    if (cell) chord(+cell.dataset.i);
+  });
+  let touchTimer = null;
+  board.addEventListener('touchstart', e => {
+    const cell = e.target.closest('.cell');
+    if (!cell) return;
+    touchTimer = setTimeout(() => { cycleFlag(+cell.dataset.i); touchTimer = null; }, 400);
+  }, { passive: true });
+  board.addEventListener('touchend', () => { if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; } });
+
+  face.addEventListener('click', () => init(cols, rows, mines, levelName));
+  window.addEventListener('keydown', e => { if (e.key === 'F2') { e.preventDefault(); init(cols, rows, mines, levelName); } });
+
+  // —— 菜单 ——
+  function hideMenu() { menuPanel.style.display = 'none'; }
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (menuPanel.style.display === 'block') { hideMenu(); return; }
+    renderBests();
+    const r = menuBtn.getBoundingClientRect();
+    menuPanel.style.left = Math.min(r.left, window.innerWidth - 230) + 'px';
+    menuPanel.style.top = (r.bottom + 6) + 'px';
+    menuPanel.style.display = 'block';
+  });
+  document.addEventListener('click', e => {
+    if (!menuPanel.contains(e.target) && e.target !== menuBtn) hideMenu();
+  });
+  menuPanel.addEventListener('click', e => {
+    const item = e.target.closest('.menu-item');
+    if (!item) return;
+    hideMenu();
+    if (item.dataset.action === 'custom') { openCustom(); return; }
+    if (item.dataset.action === 'help') { helpMask.style.display = 'flex'; return; }
+    if (item.dataset.action === 'clearbest') {
+      localStorage.removeItem('ms_best'); renderBests(); return;
+    }
+    const lv = LEVELS[item.dataset.level];
+    init(lv.cols, lv.rows, lv.mines, item.dataset.level);
+  });
+
+  // —— 玩法说明对话框 ——
+  const helpMask = document.getElementById('helpMask');
+  function closeHelp() { helpMask.style.display = 'none'; }
+  document.getElementById('helpClose').addEventListener('click', closeHelp);
+  document.getElementById('helpOk').addEventListener('click', closeHelp);
+  helpMask.addEventListener('click', e => { if (e.target === helpMask) closeHelp(); });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'F1') { e.preventDefault(); helpMask.style.display = 'flex'; }
+    if (e.key === 'Escape') { closeHelp(); closeCustom(); hideMenu(); }
+  });
+
+  // —— 自定义对话框 ——
+  const mask = document.getElementById('customMask');
+  function openCustom() {
+    document.getElementById('inRows').value = rows;
+    document.getElementById('inCols').value = cols;
+    document.getElementById('inMines').value = mines;
+    mask.style.display = 'flex';
+  }
+  function closeCustom() { mask.style.display = 'none'; }
+  document.getElementById('dlgClose').addEventListener('click', closeCustom);
+  document.getElementById('dlgCancel').addEventListener('click', closeCustom);
+  mask.addEventListener('click', e => { if (e.target === mask) closeCustom(); });
+  document.getElementById('dlgOk').addEventListener('click', () => {
+    const r = +document.getElementById('inRows').value;
+    const c = +document.getElementById('inCols').value;
+    const m = +document.getElementById('inMines').value;
+    if (!(r >= 9 && r <= 24 && c >= 9 && c <= 30 && m >= 10 && m < c * r - 9)) {
+      alert('参数无效：宽 9–30，高 9–24，雷数 ≥10 且留出至少 9 个安全格');
+      return;
+    }
+    closeCustom();
+    init(c, r, m, 'custom');
+  });
+
+  init(cols, rows, mines, levelName);
+})();
+</script>
+</body>
+</html>
